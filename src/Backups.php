@@ -3,23 +3,21 @@ namespace Godric\DbMigrations;
 
 use MySQLDump;
 
+/**
+ * Class for backup and restore of database to/from file.
+ */
 class Backups {
 
     private
         $db,
-        $disableBackups,
         $directory;
 
-    function __construct($db, $directory, $disableBackups) {
+    function __construct($db, $directory) {
         $this->db = $db;
         $this->directory = $directory;
-        $this->disableBackups = $disableBackups;
     }
 
     function backupBefore(Migration $migration) {
-        if ($this->disableBackups)
-            return;
-
         // skip empty db as workaround for MySQLDump bug
         if (empty($this->getTableNames()))
             return;

@@ -9,37 +9,27 @@ define('LATEST_MIGRATION_HASH', 'latest_migration_hash');
 class DbMigrations {
 
     private
-        $backups, // TODO
-        $db,
+        $backups,
+        $conf,
         $datastore,
-        $directory,
-        $rewriteDatabaseOnInitialMigrationChange = true, // TODO
-        $rewriteDatabaseOnLatestMigrationChange = true; // TODO
-
-    private static
-        $defaultParams = [
-            'migrationsDirectory'   =>  './migrations',
-            'tableName'             =>  'db_migrations',
-            'doBackups'             =>  true, // backups must be explicitly disabled
-            'backupsDirectory'      =>  null, // force manual configuration for security
-        ];
+        $db,
+        $migrations;
 
     function __construct($params) {
-        $realParams = array_merge(self::$defaultParams, $params);
+        $this->conf = new Config($params);
 
-        $this->db = $realParams['connection'];
-        $this->directory = $realParams['migrationsDirectory'];
-        $this->datastore = new Datastore($this->db, $realParams['tableName']);
-        $this->backups = new Backups($this->db, $realParams['backupsDirectory'], !$realParams['doBackups']);
+        $this->db = $this->conf->connection;
+        $this->datastore = new Datastore($this->db, $this->conf->tableName);
+        $this->backups = new Backups($this->db, $this->conf->backupsDirectory);
 
         $this->loadMigrations();
     }
 
     private function apply(Migration $migration) {
-        echo "applying migration {$migration->getId()}\n";
+        echo "applying migration {$migration->getId()}\n"; // TODO better logging
 
         // backup db
-        $this->backups->backupBefore($migration);
+        if ($this->conf->doBackups) $this->backups->backupBefore($migration);
 
         // apply migration
         $this->db->query('BEGIN');
@@ -59,13 +49,13 @@ class DbMigrations {
 
     private function getUnappliedMigrations() {
         return array_filter($this->migrations, function($migration) {
-            return $migration->getId() > $this->datastore->get(LAST_APPLIED_MIGRATION_ID);
+            return $migration->getId() > $this->datastore->get(LAST_APPLIED_MIGRATION_ID); // TODO optimize this, it fires one query per each get
         });
     }
 
     private function handleInitialMigrationChanges() {
         // checking of initial migration changes disabled
-        if (!$this->rewriteDatabaseOnInitialMigrationChange)
+        if (!$this->conf->checkInitialMigrationChanges)
             return;
 
         $migration = $this->getInitialMigration();
@@ -74,15 +64,21 @@ class DbMigrations {
         if ($migration->getHash() === $this->datastore->get(INITIAL_MIGRATION_HASH))
             return;
 
-        // initial migration changed - handle all changes
-        $this->backups->clearDatabase();
-        $this->apply($migration);
-        $this->datastore->set(INITIAL_MIGRATION_HASH, $migration->getHash());
+        // initial migration changed
+        if ($this->conf->rewriteDatabaseOnInitialMigrationChange) {
+            // handle all changes
+            $this->backups->clearDatabase();
+            $this->apply($migration);
+            $this->datastore->set(INITIAL_MIGRATION_HASH, $migration->getHash());
+        } else {
+            // just report error
+            throw new \Exception('Initial migration has changed.');
+        }
     }
 
     private function handleLatestMigrationChanges() {
         // checking of lastest migration changes disabled
-        if (!$this->rewriteDatabaseOnLatestMigrationChange)
+        if (!$this->conf->checkLastMigrationChanges)
             return;
 
         $migration = $this->getLatestMigration();
@@ -95,9 +91,9 @@ class DbMigrations {
         if ($migration->getHash() === $this->datastore->get(LATEST_MIGRATION_HASH))
             return;
 
-        // latest migration changed - handle all changes
-        $this->backups->restoreBefore($migration);
-        $this->apply($migration);
+        // latest migration changed
+        // TODO just report error, maybe add optional rollback in the future
+        throw new \Exception('Latest migration has changed.');
     }
 
     private function handleNormalMigrations() {
@@ -108,7 +104,7 @@ class DbMigrations {
 
     private function loadMigrations() {
         $migrations = [];
-        foreach (glob($this->directory . '/*') as $f) {
+        foreach (glob($this->conf->migrationsDirectory . '/*') as $f) {
             if (!preg_match('/(\d{3})\.php$/', $f, $m))
                 continue;
 
