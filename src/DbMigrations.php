@@ -49,7 +49,8 @@ class DbMigrations {
 
     private function getUnappliedMigrations() {
         return array_filter($this->migrations, function($migration) {
-            return $migration->getId() > $this->datastore->get(LAST_APPLIED_MIGRATION_ID); // TODO optimize this, it fires one query per each get
+            $lastId = $this->datastore->get(LAST_APPLIED_MIGRATION_ID) ?? PHP_INT_MIN; // TODO optimize this, it fires one query per each get
+            return $migration->getId() > $lastId;
         });
     }
 
