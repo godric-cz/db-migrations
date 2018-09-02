@@ -26,7 +26,9 @@ class DbMigrations {
     }
 
     private function apply(Migration $migration) {
-        echo "applying migration {$migration->getId()}\n"; // TODO better logging
+        echo "Applying migration {$migration->getId()}.\n"; // TODO better logging
+        @ob_flush();
+        flush();
 
         // backup db
         if ($this->conf->doBackups) $this->backups->backupBefore($migration);
