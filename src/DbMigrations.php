@@ -13,7 +13,8 @@ class DbMigrations {
         $conf,
         $datastore,
         $db,
-        $migrations;
+        $migrations,
+        $webGui = null;
 
     function __construct($params) {
         $this->conf = new Config($params);
@@ -21,11 +22,16 @@ class DbMigrations {
         $this->db = $this->conf->connection;
         $this->datastore = new Datastore($this->db, $this->conf->tableName);
         $this->backups = new Backups($this->db, $this->conf->backupsDirectory);
+        if ($this->conf->webGui) {
+            $this->webGui = new WebGui;
+        }
 
         $this->loadMigrations();
     }
 
     private function apply(Migration $migration) {
+        if ($this->webGui) $this->webGui->confirm($migration);
+
         echo "Applying migration {$migration->getId()}.\n"; // TODO better logging
         @ob_flush();
         flush();
@@ -123,11 +129,13 @@ class DbMigrations {
         $driver = new \mysqli_driver();
         $oldReportMode = $driver->report_mode;
         $driver->report_mode = MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT;
+        if ($this->webGui) $this->webGui->configureEnviroment();
 
         $this->handleInitialMigrationChanges();
         $this->handleNormalMigrations();
         $this->handleLatestMigrationChanges();
 
+        if ($this->webGui) $this->webGui->cleanupEnviroment();
         $driver->report_mode = $oldReportMode;
     }
 

@@ -66,7 +66,15 @@ class Config {
          *
          * Useful for test enviroments.
          */
-        $rewriteDatabaseOnInitialMigrationChange = false;
+        $rewriteDatabaseOnInitialMigrationChange = false,
+
+        /**
+         * If enabled, db migrations will show confirmation html form in case
+         * there are any unapplied migrations.
+         *
+         * Until confirmed, no migrations are applied. Ends script execution.
+         */
+        $webGui = false;
 
     /**
      * Reads params from associative array and loads them to class
